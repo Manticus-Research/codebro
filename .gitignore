@@ -1,0 +1,4 @@
+openai_key
+ollama_cat.conf
+__pycache__/
+*.pyc
