@@ -1,4 +1,9 @@
 class OpenAIBackend:
+    function_support = {
+        "o1-preview": False,
+        "gpt-4o": True,
+    }
+
     def __init__(self):
         self.model = "o1-preview"
         self.api_base_url = "https://api.openai.com/v1"
@@ -23,4 +28,11 @@ class OpenAIBackend:
         return response["choices"][0]["message"]
 
     def extract_usage(self, response):
-        return response["usage"]
+        return response.get("usage", {})
+
+    def append_functions(self, payload, functions):
+        if self.function_support.get(self.model):
+            payload["functions"] = functions
+            payload["function_call"] = "auto"
+
+        return payload
