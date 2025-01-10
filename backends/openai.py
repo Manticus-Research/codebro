@@ -8,8 +8,8 @@ class OpenAIBackend:
     tool_role = "function"
     system_role = "user"
 
-    def __init__(self):
-        self.model = "o1-preview"
+    def __init__(self, model="o1-preview"):
+        self.model = model
         self.api_base_url = "https://api.openai.com/v1"
         with open('openai_key') as f:
             self.api_key = f.read().strip()

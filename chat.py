@@ -128,11 +128,10 @@ class Chat:
 
     def setup_assistant_prompt(self):
         self.history.append({
-            "role": "system",
+            "role": self.default_llm.backend.system_role,
             "content": """
                 You are a software development assistant.
                 You will be able to interact with the codebase and perform various tasks.
-                You will use the provided tools to modify the codebase.
                 When you are asked to modify, alter, change, augment or manipulate code, you MUST use the provided tools.
                 You MUST not remove code unless asked to do so.
                 You MUST take care to not overwrite existing code when using the provided tools.
