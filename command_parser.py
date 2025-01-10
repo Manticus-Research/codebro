@@ -47,14 +47,14 @@ class CommandParser:
         self.client = client
         self.commands = []
         self.command_function_map = {}
-        self.add_command(["/exit", "/quit", "/q"], self._exit, "Quit the program")
-        self.add_command(["/help", "/h"], self._help, "Display available commands")
-        self.add_command(["/history", "/hist", "/hi"], self._history, "Show previous messages")
-        self.add_command(["/clearhistory", "/ch"], self._clear_history, "Clear previous messages")
-        self.add_command(["/usage", "/u"], self._usage, "Show usage statistics")
-        self.add_command(["/debug", "/d"], self._debug, "Start debugger")
-        self.add_command(["/add_context", "/ac"], self._add_context, "<path> - Add a file or folder as context")
-        self.add_command(["/refresh_context", "/rc"], self._refresh_context, "Refresh context from files")
+        self.add_command(["\\exit", "\\quit", "\\q"], self._exit, "Quit the program")
+        self.add_command(["\\help", "\\h"], self._help, "Display available commands")
+        self.add_command(["\\history", "\\hist", "\\hi"], self._history, "Show previous messages")
+        self.add_command(["\\clearhistory", "\\ch"], self._clear_history, "Clear previous messages")
+        self.add_command(["\\usage", "\\u"], self._usage, "Show usage statistics")
+        self.add_command(["\\debug", "\\d"], self._debug, "Start debugger")
+        self.add_command(["\\add_context", "\\ac"], self._add_context, "<path> - Add a file or folder as context")
+        self.add_command(["\\refresh_context", "\\rc"], self._refresh_context, "Refresh context from files")
 
     def add_command(self, names, func, help_text=""):
         if isinstance(names, str):
@@ -102,12 +102,7 @@ class CommandParser:
         print("History cleared.")
 
     def _usage(self, *args):
-        total = sum(item.get("total_tokens", 0) for item in self.client.usage if item)
-        prompt_tokens = sum(item.get("prompt_tokens", 0) for item in self.client.usage if item)
-        completion_tokens = sum(item.get("completion_tokens", 0) for item in self.client.usage if item)
-        print("Prompt tokens used:", prompt_tokens)
-        print("Completion tokens used:", completion_tokens)
-        print("Total tokens used:", total)
+        print(json.dumps(self.client.aggregate_usage, indent=2))
 
     def _debug(self, *args):
         import pdb; pdb.set_trace()

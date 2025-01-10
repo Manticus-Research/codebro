@@ -8,4 +8,10 @@ def parse_args():
         nargs='+',
         help='Path(s) to use as context for the code assistant.'
     )
+    parser.add_argument(
+        'working_dir',
+        default='.',
+        type=str,
+        help='Working directory for the code assistant.'
+    )
     return parser.parse_args()

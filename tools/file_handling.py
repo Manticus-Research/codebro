@@ -2,17 +2,17 @@ from .base import LLMToolArgument, llmtool
 
 
 @llmtool(
-    name="update_file",
-    description="Update a file with new content.",
+    name="write_file",
+    description="Overwrite a file with new content.",
     args=[
         LLMToolArgument("file_path", "string", "Path to the file to update.", required=True),
         LLMToolArgument("content", "string", "Content to write to the file.", required=True),
     ],
 )
-def update_file(file_path, content):
+def write_file(file_path, content):
     with open(file_path, 'w') as f:
         f.write(content)
-    return f"Updated file: {file_path}"
+    return f"Wrote to file: {file_path}"
 
 
 @llmtool(

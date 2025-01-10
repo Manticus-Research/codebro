@@ -4,6 +4,10 @@ class OpenAIBackend:
         "gpt-4o": True,
     }
 
+    tool_call_property = "function_call"
+    tool_role = "function"
+    system_role = "user"
+
     def __init__(self):
         self.model = "o1-preview"
         self.api_base_url = "https://api.openai.com/v1"
@@ -36,3 +40,6 @@ class OpenAIBackend:
             payload["function_call"] = "auto"
 
         return payload
+
+    def unwrap_function_call(self, function_call):
+        return function_call
