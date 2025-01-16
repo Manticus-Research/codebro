@@ -1,30 +1,57 @@
-from collections import defaultdict
-from datetime import datetime
+import uuid
+import json
 import os
 import fnmatch
+from hashlib import md5
+
+from collections import defaultdict
+from datetime import datetime
+
 from command_parser import CommandParser
+from database import Message, ContextPath # Import database models
+
 
 class Chat:
-    def __init__(self, default_llm, context_paths, working_dir):
+    def __init__(self, default_llm, context_paths, working_dir, session):
         self.default_llm = default_llm
-        self.history = []
         self.command_parser = CommandParser(self)
         self.context_paths = context_paths
-        self.working_dir = working_dir
-        self.context = {}
+        self.known_context = set()
+        self.working_dir = os.path.relpath(working_dir, os.getcwd())
+        self.session = session
         self.llms = {}
-        self.load_context()
+        self.history = []
+        for msg in session.messages:
+            self._add_message_to_history(json.loads(msg.full_message))
         self.last_displayed_message = 0
-        self.setup_assistant_prompt()
+
+        if not self.history:
+            self.setup_assistant_prompt()
+        self.load_context()
 
     def add_llm(self, llm, role):
         self.llms[role] = llm
 
+    def _add_message_to_history(self, message):
+        self.history.append(message)
+        if message.get('is_context'):
+            self.known_context.add(message['context_hash'])
+
     def add_message(self, message):
-        self.messages.append(message)
+        self._add_message_to_history(message)
+        Message.create(
+            session=self.session,
+            role=message["role"],
+            content=message["content"],
+            full_message=json.dumps(message),
+            model=self.default_llm.get_model(),
+        )
+
+        self.session.last_message_at = datetime.now()
+        self.session.save()
 
     def get_messages(self):
-        return self.messages
+        return self.history
 
     def get_name(self):
         return self.name
@@ -32,31 +59,43 @@ class Chat:
     def __str__(self):
         return self.name
 
-    def add_file_as_context(self, file_path: str):
+    def add_context_path(self, path):
+        resolved_path = os.path.abspath(path)
+        if os.path.isfile(path):
+            self._add_file_as_context(path)
+        elif os.path.isdir(path):
+            self._add_folder_as_context(path)
+        else:
+            return
+        ContextPath.create(
+            path=resolved_path,
+            session=self.session,
+        )
+        return path
+
+    def _get_file_content(self, file_path):
         with open(file_path, 'r') as f:
-            self.context[file_path] = f.read()
+            content = f.read()
+        _hash = md5(content.encode()).hexdigest()
+        return content, _hash
 
-        with open(file_path, 'r') as f:
-            context = f.read()
-            self.history.append({
-                "role": "user",
-                "content": f"File: {file_path}\n----------------",
-                "is_context": True
-            })
+    def _add_file_as_context(self, file_path: str):
+        relative_path = os.path.relpath(file_path, self.working_dir)
 
-            self.history.append({
-                "role": "user",
-                "content": context,
-                "is_context": True
-            })
+        file_content, file_content_hash = self._get_file_content(file_path)
+        if file_content_hash in self.known_context:
+            return
+        self.known_context.add(file_content_hash)
+        boundary = uuid.uuid4().hex
+        message_content = f"File: {relative_path}\nBoundary: {boundary}\n{file_content}{boundary}\n"
+        self.add_message({
+            "role": "user",
+            "content": message_content,
+            "is_context": True,
+            "context_hash": file_content_hash,
+        })
 
-            self.history.append({
-                "role": "user",
-                "content": f"File: {file_path} end of file",
-                "is_context": True
-            })
-
-    def add_folder_as_context(self, folder_path: str):
+    def _add_folder_as_context(self, folder_path: str):
         ignore_patterns = [".git/*"]
         gitignore_path = os.path.join(folder_path, '.gitignore')
         if os.path.isfile(gitignore_path):
@@ -65,30 +104,28 @@ class Chat:
                     line.strip() for line in f
                     if line.strip() and not line.startswith('#')
                 ]
-        for root, dirs, files in os.walk(folder_path):
+        for root, _dirs, files in os.walk(folder_path):
             for filename in files:
                 if filename == '.gitignore':
                     continue
                 full_path = os.path.join(root, filename)
                 rel_path = os.path.relpath(full_path, folder_path)
                 if not any(fnmatch.fnmatch(rel_path, pat) for pat in ignore_patterns):
-                    self.add_file_as_context(full_path)
+                    self._add_file_as_context(full_path)
 
     def load_context(self):
-        self.add_folder_as_context(self.working_dir)
+        self._add_folder_as_context(self.working_dir)
 
         for context_path in self.context_paths:
             if os.path.isfile(context_path):
-                self.add_file_as_context(context_path)
+                self._add_file_as_context(context_path)
             elif os.path.isdir(context_path):
-                self.add_folder_as_context(context_path)
+                self._add_folder_as_context(context_path)
             else:
                 print(f"Invalid context path: {context_path}")
                 raise ValueError(f"Invalid context path: {context_path}")
 
     def refresh_context(self):
-        # Remove all context messages from history
-        self.history = [msg for msg in self.history if not msg.get('is_context')]
         # Reload the context
         self.load_context()
         print("Context refreshed.")
@@ -98,8 +135,15 @@ class Chat:
             "role": "user",
             "content": message
         }
-        self.history.append(wrapped_message)
-        llm.post_to_chat(self.history)
+        self.add_message(wrapped_message)
+        assistant_messages = llm.post_to_chat(self.history)
+        for msg in assistant_messages:
+            self.add_message(msg)
+
+    def clear_history(self):
+        # Delete messages from the database for this session
+        Message.delete().where(Message.session == self.session).execute()
+        self.history = []
 
     def main(self):
         COMMAND_PREFIX = "\\"
@@ -127,12 +171,11 @@ class Chat:
         print("========================================")
 
     def setup_assistant_prompt(self):
-        self.history.append({
+        self.add_message({
             "role": self.default_llm.backend.system_role,
             "content": """
                 You are a software development assistant.
                 You will be able to interact with the codebase and perform various tasks.
-                When you are asked to modify, alter, change, augment or manipulate code, you MUST use the provided tools.
                 You MUST not remove code unless asked to do so.
                 You MUST take care to not overwrite existing code when using the provided tools.
                 You will be helpful, precise and thorough.

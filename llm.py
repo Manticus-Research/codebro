@@ -52,10 +52,11 @@ class LLM:
 
     def handle_chat_response(self, messages, response: Dict):
         message = self.backend.extract_message(response)
-        messages.append(message)
         usage = self.backend.extract_usage(response)
         if usage:
-            self.usage.append(self.backend.extract_usage(response))
+            self.usage.append(usage)
+
+        new_messages = [message]
 
         if self.backend.tool_call_property in message:
             # The assistant wants to call a function
@@ -64,22 +65,20 @@ class LLM:
             if not isinstance(calls, list):
                 calls = [calls]
             for call in calls:
-                self.handle_function_call(call)
-        else:
-            # Regular assistant message
-            pass
+                new_messages.extend(self.handle_function_call(messages, call))
+
+        return new_messages
 
     def handle_function_call(self, messages, emitted_call: Dict):
         function_call = self.backend.unwrap_function_call(emitted_call)
         function_name = function_call['name']
 
-        print("Function call:", function_name)
         arguments = function_call['arguments']
         function = self.function_implementations_map.get(function_name)
 
         if function is None:
             print(f"Function {function_name} not found.")
-            return
+            return []
 
         try:
             result = function(**arguments)
@@ -88,16 +87,17 @@ class LLM:
             print(f"Error calling function: {e}")
 
         # Add the function's response to history
-        messages.append({
+        function_response_message = {
             "role": self.backend.tool_role,
             "name": function_name,
             "content": json.dumps(result),
-        })
+        }
+        new_messages = [function_response_message]
 
         # Continue the conversation with the function's result
         payload = {
             'model': self.backend.get_model('chat'),
-            'messages': messages,
+            'messages': messages + [function_response_message],
             "stream": False,
         }
         response = self.request(
@@ -105,7 +105,8 @@ class LLM:
             self.backend.get_chat_endpoint(),
             json=payload
         )
-        self.handle_chat_response(response.json())
+
+        return new_messages + self.handle_chat_response(messages, response.json())
 
     def get_model(self):
         return self.backend.get_model('chat')

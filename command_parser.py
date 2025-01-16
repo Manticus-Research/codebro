@@ -77,13 +77,13 @@ class CommandParser:
                 # Find the command to get the usage
                 command = next((c for c in self.commands if cmd in c["names"]), None)
                 if command:
-                    print(f"Usage: {'/'.join(command['names'])} {command['help']}")
+                    print(f"Usage: " + '\\'.join(command['names']) + "{command['help']}")
                 else:
                     print(f"No usage information for {cmd}")
             return
         else:
             print(f"Unknown command: {cmd}")
-            print("Type '/help' to see available commands.")
+            print("Type '\\help' to see available commands.")
 
     def _exit(self, *args):
         exit(0)
@@ -98,7 +98,7 @@ class CommandParser:
             print(json.dumps(message, indent=2))
 
     def _clear_history(self, *args):
-        self.client.history = []
+        self.client.clear_history()
         print("History cleared.")
 
     def _usage(self, *args):
@@ -109,17 +109,15 @@ class CommandParser:
 
     def _add_context(self, *args):
         if not args:
-            print("Usage: /add_context <path>")
+            print("Usage: \\add_context <path>")
             return
         path = ' '.join(args)
-        if os.path.isfile(path):
-            self.client.add_file_as_context(path)
-            print(f"Added file '{path}' as context.")
-        elif os.path.isdir(path):
-            self.client.add_folder_as_context(path)
-            print(f"Added directory '{path}' and its contents as context.")
+
+        added = self.client.add_context_path(path)
+        if added:
+            print(f"Added context: {added}")
         else:
-            print(f"Invalid path: {path}")
+            print(f"Could not add context: {path}")
 
     def _refresh_context(self, *args):
         self.client.refresh_context()

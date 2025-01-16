@@ -5,6 +5,8 @@ def parse_args():
     parser.add_argument(
         '--context_paths', "-c",
         type=str,
+        default=[],
+        action='append',
         nargs='+',
         help='Path(s) to use as context for the code assistant.'
     )
