@@ -3,13 +3,14 @@ import os
 
 from argument_parser import parse_args
 from backends import OllamaBackend, OpenAIBackend
-from chat_gui import ChatGUI  # Import the new ChatGUI class
 from database import database, Session, ContextPath
 from migrations.migrate import upgrade
 from llm import LLM
 from tools import write_file, read_file
 
-if __name__ == "__main__":
+from chat_gui import ChatGUI  # Import the updated ChatGUI
+
+if __name__ in ("__main__", "__mp_main__"):
     upgrade(database)
 
     parsed_args = parse_args()
@@ -24,10 +25,12 @@ if __name__ == "__main__":
 
     session = Session.select().where(Session.name == session_name).first()
     if session:
-        context_paths = [context_path.path for context_path in session.context_paths or []]
+        context_paths = [
+            context_path.path for context_path in session.context_paths or []
+        ]
     else:
-        session = session = Session.create(
-            name=f"CodeBud Chat - {os.path.basename(working_dir)}",
+        session = Session.create(
+            name=session_name,
             working_dir=working_dir,
         )
         for context_path in parsed_args.context_paths:
@@ -43,4 +46,5 @@ if __name__ == "__main__":
         parsed_args.working_dir,
         session=session,
     )
+    # Start the NiceGUI app
     chat.main()

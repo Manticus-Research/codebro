@@ -1,149 +1,147 @@
-import tkinter as tk
-from tkinter import ttk
+from nicegui import ui
 from chat import Chat
+import asyncio
 
-
-class ScrollableFrame(ttk.Frame):
-    def __init__(self, container, *args, **kwargs):
-        super().__init__(container, *args, **kwargs)
-        self.canvas = tk.Canvas(self, highlightthickness=0)
-        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
-
-        self.scrollable_frame = ttk.Frame(self.canvas)
-
-        # Create a window inside the canvas for the scrollable frame
-        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-
-        # Update scrollregion when the size of the scrollable_frame changes
-        self.scrollable_frame.bind(
-            "<Configure>",
-            self._on_frame_configure
-        )
-
-        # Bind the canvas width to the scrollable frame width
-        self.canvas.bind(
-            "<Configure>",
-            self._on_canvas_configure
-        )
-
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
-
-    def _on_frame_configure(self, event):
-        """Reset the scroll region to encompass the inner frame"""
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def _on_canvas_configure(self, event):
-        """Resize the inner frame to match the canvas width"""
-        canvas_width = event.width
-        self.canvas.itemconfig(self.canvas_window, width=canvas_width)
-
-    def bind_mousewheel(self):
-        """Enable scrolling with the mouse wheel"""
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
-
-    def _on_mousewheel(self, event):
-        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-
-class ChatMessage(tk.Text):
-    def __init__(self, message, *args, **kwargs):
-        self.message = message
-
-        sender = message.get("role")
-        # Determine background color based on sender
-        if sender == "assistant" or sender == "system":
-            bg_color = "#e6e6e6"  # Light gray for assistant messages
-            self.anchor = "w"
-        else:
-            bg_color = "#d1ffd6"  # Light green for user messages
-            self.anchor = "e"
-
-        _kwargs = {
-            "bg": bg_color,
-            "wrap": "none",
-            "padx": 5,
-            "pady": 5,
-            "relief": "flat",
-            "bd": 0,
-            "highlightthickness": 0,
-        }
-        _kwargs.update(kwargs)
-        super().__init__(*args, **_kwargs)
-        self.insert(tk.END, message["content"])
-        self.configure(state="disabled")
-
-        self.update_idletasks()
-        num_of_lines = int(self.index("end - 1 line").split(".")[0])
-        self.configure(height=num_of_lines)
 
 class ChatGUI(Chat):
     def __init__(self, title, default_llm, context_paths, working_dir, session):
         super().__init__(default_llm, context_paths, working_dir, session)
-
-        self.root = tk.Tk()
-        self.root.title(title)
-        self.root.geometry("600x500")  # Set a default window size
-
-        # Configure the root window"s grid
-        self.root.rowconfigure(0, weight=1)
-        self.root.rowconfigure(1, weight=0)
-        self.root.columnconfigure(0, weight=1)
-
-        # Create the scrollable frame for messages
-        self.scrollable_frame = ScrollableFrame(self.root)
-        self.scrollable_frame.grid(row=0, column=0, sticky="nsew")
-
-        # Enable mouse wheel scrolling
-        self.scrollable_frame.bind_mousewheel()
-
-        # Reference to the inner frame where messages will be added
-        self.messages_frame = self.scrollable_frame.scrollable_frame
-        self.messages_frame.columnconfigure(0, weight=1)
-
-        # Entry field for user input
-        self.input_field = tk.Text(self.root, height=10)
-        self.input_field.grid(row=1, column=0, sticky="ew")
-        self.input_field.bind("<Return>", self.send_message)
-
+        self.title = title
         self.last_displayed_message = 0
-        self.update_chat_display()
 
-    def send_message(self, event=None):
-        message = self.input_field.get("1.0", tk.END)
-        self.input_field.delete("1.0", tk.END)
+        # Store references to UI elements
+        self.messages_container = None
+        self.input_field = None
+
+        # Flag to indicate if the app should exit
+        self.exit_flag = False
+
+    def construct_ui(self):
+        @ui.page("/")
+        def page():
+            with ui.column().classes("w-full").style("height: calc(100vh - 2rem)"):
+                with (
+                    ui.row()
+                    .classes("flex-grow w-full overflow-auto")
+                    .style("box-sizing: border-box; height: 40px")
+                ):
+                    ui.label(f"{self.title}").classes("text-center")
+                with (
+                    ui.row()
+                    .classes("flex-grow w-full overflow-auto")
+                    .style("box-sizing: border-box; height: calc(80% - 40px)")
+                ):
+                    self.messages_container = ui.column().classes("w-full")
+                with (
+                    ui.row()
+                    .classes("flex-grow w-full p-4")
+                    .style("height: 20%; box-sizing: border-box;")
+                ):
+                    self.input_field = (
+                        ui.input(placeholder="Type your message here...")
+                        .props("autofocus")
+                        .classes("w-full")
+                    )
+                    self.input_field.on(
+                        "keydown",
+                        lambda event: event.args["key"] == "Enter"
+                        and self.send_message(),
+                    )
+                    ui.button("Send", on_click=self.send_message).classes("ml-2")
+
+            # Start the background task to update the chat display
+            ui.timer(0.5, self.update_chat_display)
+
+    def send_message(self, _=None):
+        message = self.input_field.value
+        self.input_field.value = ""
         if message.strip():
-            self.post_to_llm(self.default_llm, message)
+            # Run command or send to LLM asynchronously
+            asyncio.create_task(self.handle_user_message(message))
+
+    async def handle_user_message(self, message):
+        if message.startswith("\\"):
+            # Handle command
+            result = await asyncio.to_thread(self.command_parser.run, message)
+            if result:
+                # Display the result as a system message
+                system_message = {
+                    "internal": True,
+                    "role": "CodeBuddy App",
+                    "content": result.replace("\n", "<br>"),
+                }
+                self.add_message(system_message)
+        else:
+            # Send message to LLM
+            await asyncio.to_thread(self.post_to_llm, self.default_llm, message)
+
+        # Check if exit was requested
+        if self.exit_flag:
+            ui.stop()
 
     def update_chat_display(self):
         while self.last_displayed_message < len(self.history):
             message = self.history[self.last_displayed_message]
             self.print_message(message)
             self.last_displayed_message += 1
-        self.root.after(100, self.update_chat_display)
 
     def print_message(self, message):
         if message.get("is_context"):
             return
 
-        # Create a frame for each message
-        message_frame = ChatMessage(message, self.messages_frame)
-        # message_frame.grid(row=self.last_displayed_message, column=0, sticky="ew", padx=5, pady=2)
+        sender = message.get("role", "")
+        content = message.get("content", "")
+        internal = message.get("internal", False)
 
-        # Configure grid to ensure the message fills the width
-        message_frame.columnconfigure(0, weight=1)
-        self.messages_frame.rowconfigure(self.last_displayed_message, weight=1)
-
-        # Align the message to the left or right based on the sender
-        if message_frame.anchor == "e":
-            message_frame.grid(row=self.last_displayed_message, column=0, sticky="e", padx=5, pady=2)
+        # Determine alignment and style based on sender
+        if sender == "assistant":
+            alignment = "start"
+            bg_color = "lightgray"
+            text_color = "black"
+            sender_label = "Assistant"
+        elif sender == "system":
+            alignment = "center"
+            bg_color = "#ffffe0"  # Light yellow
+            text_color = "black"
+            sender_label = "System"
+        elif internal:
+            alignment = "center"
+            bg_color = "#f0f0f0"
+            text_color = "black"
+            sender_label = "App"
         else:
-            message_frame.grid(row=self.last_displayed_message, column=0, sticky="w", padx=5, pady=2)
+            alignment = "end"
+            bg_color = "#d1ffd6"  # Light green
+            text_color = "black"
+            sender_label = "You"
 
-        # Auto-scroll to the bottom
-        self.messages_frame.update_idletasks()
-        self.scrollable_frame.canvas.yview_moveto(1.0)
+        with self.messages_container:
+            with (
+                ui.card()
+                .style(
+                    f"""
+                        align-self: {alignment};
+                        background-color: {bg_color};
+                        color: {text_color};
+                        max-width: 70%;
+                        margin: 5px;
+                        overflow-y: auto;
+                    """
+                )
+                .classes("p-2")
+            ):
+                with ui.row():
+                    ui.label(f"{sender_label}:").style("font-weight: bold")
+                ui.markdown(content).classes("p-2")
+
+        # Scroll to bottom
+        self.messages_container.update()
+        ui.run_javascript("window.scrollTo(0, document.body.scrollHeight);")
 
     def main(self):
-        self.root.mainloop()
+        self.construct_ui()
+        ui.run(title=self.title)
+
+    def exit_app(self):
+        # Set the exit flag to True
+        self.exit_flag = True

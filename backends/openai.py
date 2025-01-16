@@ -11,7 +11,7 @@ class OpenAIBackend:
     def __init__(self, model="o1-preview"):
         self.model = model
         self.api_base_url = "https://api.openai.com/v1"
-        with open('openai_key') as f:
+        with open("openai_key") as f:
             self.api_key = f.read().strip()
 
     def get_model(self, usecase: str):
@@ -24,9 +24,7 @@ class OpenAIBackend:
         return "chat/completions"
 
     def get_auth_headers(self):
-        return {
-            "Authorization": f"Bearer {self.api_key}"
-        }
+        return {"Authorization": f"Bearer {self.api_key}"}
 
     def extract_message(self, response):
         return response["choices"][0]["message"]

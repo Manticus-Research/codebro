@@ -1,8 +1,15 @@
 from datetime import datetime, timezone
 
-from peewee import Model, SqliteDatabase, TextField, DateTimeField, IntegerField, ForeignKeyField
+from peewee import (
+    Model,
+    SqliteDatabase,
+    TextField,
+    DateTimeField,
+    ForeignKeyField,
+)
 
-database = SqliteDatabase('codebuddy.db')
+database = SqliteDatabase("codebuddy.db")
+
 
 class BaseModel(Model):
     class Meta:
@@ -18,11 +25,11 @@ class Session(BaseModel):
 
 class ContextPath(BaseModel):
     path = TextField()
-    session = ForeignKeyField(Session, backref='context_paths')
+    session = ForeignKeyField(Session, backref="context_paths")
 
 
 class Message(BaseModel):
-    session = ForeignKeyField(Session, backref='messages')
+    session = ForeignKeyField(Session, backref="messages")
     model = TextField()
     role = TextField()
     content = TextField()

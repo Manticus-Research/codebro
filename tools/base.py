@@ -1,4 +1,3 @@
-
 class LLMToolArgument:
     def __init__(self, name, type, description, required=False, options=None):
         self.name = name
@@ -18,6 +17,7 @@ class LLMToolArgument:
             definition["enum"] = self.options
         return definition
 
+
 class LLMTool:
     def __init__(self, name, description, args, function):
         self.name = name
@@ -34,9 +34,7 @@ class LLMTool:
             "description": "Run a language model.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    arg.name: arg.get_definition() for arg in self.args
-                },
+                "properties": {arg.name: arg.get_definition() for arg in self.args},
                 "required": [arg.name for arg in self.args if arg.required],
             },
         }

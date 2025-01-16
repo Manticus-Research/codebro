@@ -17,36 +17,34 @@ class LLM:
     def add_tool(self, tool: LLMTool):
         definition = tool.get_definition()
         self.functions.append(definition)
-        self.function_implementations_map[definition['name']] = tool
+        self.function_implementations_map[definition["name"]] = tool
 
     def request(self, method: str, endpoint: str, **kwargs):
         url = self.backend.get_endpoint(endpoint)
 
         auth_headers = self.backend.get_auth_headers()
-        headers = kwargs.get('headers', {})
+        headers = kwargs.get("headers", {})
         headers.update(auth_headers)
 
         response = requests.request(method, url, headers=headers, **kwargs)
         try:
             response.raise_for_status()
-        except requests.exceptions.HTTPError as e:
-            import pdb; pdb.set_trace()
+        except requests.exceptions.HTTPError:
+            import pdb
+
+            pdb.set_trace()
             raise
 
         return response
 
     def post_to_chat(self, messages: str):
         payload = {
-            'model': self.backend.get_model('chat'),
-            'messages': messages,
+            "model": self.backend.get_model("chat"),
+            "messages": messages,
             "stream": False,
         }
         payload = self.backend.append_functions(payload, self.functions)
-        response = self.request(
-            'POST',
-            self.backend.get_chat_endpoint(),
-            json=payload
-        )
+        response = self.request("POST", self.backend.get_chat_endpoint(), json=payload)
 
         return self.handle_chat_response(messages, response.json())
 
@@ -71,9 +69,9 @@ class LLM:
 
     def handle_function_call(self, messages, emitted_call: Dict):
         function_call = self.backend.unwrap_function_call(emitted_call)
-        function_name = function_call['name']
+        function_name = function_call["name"]
 
-        arguments = function_call['arguments']
+        arguments = function_call["arguments"]
         function = self.function_implementations_map.get(function_name)
 
         if function is None:
@@ -96,17 +94,13 @@ class LLM:
 
         # Continue the conversation with the function's result
         payload = {
-            'model': self.backend.get_model('chat'),
-            'messages': messages + [function_response_message],
+            "model": self.backend.get_model("chat"),
+            "messages": messages + [function_response_message],
             "stream": False,
         }
-        response = self.request(
-            'POST',
-            self.backend.get_chat_endpoint(),
-            json=payload
-        )
+        response = self.request("POST", self.backend.get_chat_endpoint(), json=payload)
 
         return new_messages + self.handle_chat_response(messages, response.json())
 
     def get_model(self):
-        return self.backend.get_model('chat')
+        return self.backend.get_model("chat")
