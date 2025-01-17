@@ -56,28 +56,11 @@ class ChatGUI(Chat):
         message = self.input_field.value
         self.input_field.value = ""
         if message.strip():
-            # Run command or send to LLM asynchronously
+            # Send to LLM asynchronously
             asyncio.create_task(self.handle_user_message(message))
 
     async def handle_user_message(self, message):
-        if message.startswith("\\"):
-            # Handle command
-            result = await asyncio.to_thread(self.command_parser.run, message)
-            if result:
-                # Display the result as a system message
-                system_message = {
-                    "internal": True,
-                    "role": "CodeBuddy App",
-                    "content": result.replace("\n", "<br>"),
-                }
-                self.add_message(system_message)
-        else:
-            # Send message to LLM
-            await asyncio.to_thread(self.post_to_llm, self.default_llm, message)
-
-        # Check if exit was requested
-        if self.exit_flag:
-            ui.stop()
+        await asyncio.to_thread(self.post_to_llm, self.default_llm, message)
 
     def update_chat_display(self):
         while self.last_displayed_message < len(self.history):
@@ -91,7 +74,6 @@ class ChatGUI(Chat):
 
         sender = message.get("role", "")
         content = message.get("content", "")
-        internal = message.get("internal", False)
 
         # Determine alignment and style based on sender
         if sender == "assistant":
@@ -104,11 +86,6 @@ class ChatGUI(Chat):
             bg_color = "#ffffe0"  # Light yellow
             text_color = "black"
             sender_label = "System"
-        elif internal:
-            alignment = "center"
-            bg_color = "#f0f0f0"
-            text_color = "black"
-            sender_label = "App"
         else:
             alignment = "end"
             bg_color = "#d1ffd6"  # Light green
