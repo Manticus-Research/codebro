@@ -30,6 +30,11 @@ class CommandParser:
             self._refresh_context,
             "Refresh context from files",
         )
+        self.add_command(
+            ["\\clear_commands", "\\cc"],
+            self._clear_commands,
+            "Delete all command messags",
+        )
 
     def add_command(self, names, func, help_text=""):
         if isinstance(names, str):
@@ -106,3 +111,7 @@ class CommandParser:
     def _refresh_context(self, *args):
         self.client.refresh_context()
         return "Context refreshed."
+
+    def _clear_commands(self, *args):
+        self.client.clear_commands()
+        return "Commands cleared."
