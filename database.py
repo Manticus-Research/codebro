@@ -17,8 +17,8 @@ class BaseModel(Model):
 
 
 class Session(BaseModel):
-    name = TextField()
-    working_dir = TextField()
+    name = TextField(index=True)
+    working_dir = TextField(index=True)
     started_at = DateTimeField(default=datetime.now(timezone.utc))
     last_message_at = DateTimeField(default=datetime.now(timezone.utc))
 
@@ -30,8 +30,8 @@ class ContextPath(BaseModel):
 
 class Message(BaseModel):
     session = ForeignKeyField(Session, backref="messages")
-    model = TextField()
-    role = TextField()
+    model = TextField(index=True)
+    role = TextField(index=True)
     content = TextField()
     full_message = TextField()
     timestamp = DateTimeField(default=datetime.now(timezone.utc))
