@@ -1,19 +1,24 @@
 import os
 import re
 from datetime import datetime, timezone
-from peewee import TextField, DateTimeField
-from database import BaseModel
+from peewee import Model, TextField, DateTimeField
 
 
-class Migration(BaseModel):
-    name = TextField()
-    applied_at = DateTimeField(default=datetime.now(timezone.utc))
+def ensure_migration_table(db):
+    class Migration(Model):
+        name = TextField()
+        applied_at = DateTimeField(default=datetime.now(timezone.utc))
+
+        class Meta:
+            database = db
+
+    db.create_tables([Migration], safe=True)
+    return Migration
 
 
 def upgrade(database):
     """Apply all new migrations."""
-    # Create the Migration table if it doesn't exist.
-    database.create_tables([Migration], safe=True)
+    Migration = ensure_migration_table(database)
 
     # Check for migration files in the migrations directory.
     migration_files = os.listdir(os.path.dirname(__file__))
@@ -45,8 +50,7 @@ def upgrade(database):
 
 def downgrade(database):
     """Revert the latest migration."""
-
-    database.create_tables([Migration], safe=True)
+    Migration = ensure_migration_table(database)
 
     last_migration = Migration.select().order_by(Migration.applied_at.desc()).first()
     if last_migration:
