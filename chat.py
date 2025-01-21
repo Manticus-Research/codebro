@@ -54,10 +54,10 @@ class Chat:
         return self.history
 
     def get_name(self):
-        return self.name
+        return self.session.name
 
     def __str__(self):
-        return self.name
+        return self.session.name
 
     def add_context_path(self, path):
         resolved_path = os.path.abspath(path)

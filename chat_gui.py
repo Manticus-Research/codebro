@@ -1,16 +1,16 @@
 from nicegui import ui
-from chat import Chat
 import asyncio
 
 
-class ChatGUI(Chat):
-    def __init__(self, title, default_llm, context_paths, working_dir, session):
-        super().__init__(default_llm, context_paths, working_dir, session)
-        self.title = title
+class ChatGUI:
+    def __init__(self, chat):
+        self.chat = chat
+        self.title = chat.get_name()
         self.last_displayed_message = 0
 
         # Store references to UI elements
         self.messages_container = None
+        self.message_cards = []
         self.input_field = None
 
         # Flag to indicate if the app should exit
@@ -60,13 +60,13 @@ class ChatGUI(Chat):
             asyncio.create_task(self.handle_user_message(message))
 
     async def handle_user_message(self, message):
-        await asyncio.to_thread(self.post_to_llm, self.default_llm, message)
+        await asyncio.to_thread(self.chat.post_to_llm, self.chat.default_llm, message)
 
     def update_chat_display(self):
-        while self.last_displayed_message < len(self.history):
-            message = self.history[self.last_displayed_message]
-            self.print_message(message)
+        while self.last_displayed_message < len(self.chat.history):
+            message = self.chat.history[self.last_displayed_message]
             self.last_displayed_message += 1
+            self.print_message(message)
 
     def print_message(self, message):
         if message.get("is_context"):
@@ -82,7 +82,7 @@ class ChatGUI(Chat):
             text_color = "black"
             sender_label = "Assistant"
         elif sender == "system":
-            alignment = "center"
+            alignment = "start"
             bg_color = "#ffffe0"  # Light yellow
             text_color = "black"
             sender_label = "System"
@@ -93,8 +93,9 @@ class ChatGUI(Chat):
             sender_label = "You"
 
         with self.messages_container:
+            message_card = ui.card()
             with (
-                ui.card()
+                message_card
                 .style(
                     f"""
                         align-self: {alignment};
@@ -106,10 +107,11 @@ class ChatGUI(Chat):
                     """
                 )
                 .classes("p-2")
-            ):
+            ) as card:
                 with ui.row():
                     ui.label(f"{sender_label}:").style("font-weight: bold")
                 ui.markdown(content).classes("p-2")
+        self.message_cards.append(message_card)
 
         # Scroll to bottom
         self.messages_container.update()

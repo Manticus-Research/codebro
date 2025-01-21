@@ -8,6 +8,7 @@ from migrations.migrate import upgrade
 from llm import LLM
 from tools import write_file, read_file
 
+from chat import Chat
 from chat_gui import ChatGUI  # Import the updated ChatGUI
 
 if __name__ in ("__main__", "__mp_main__"):
@@ -39,12 +40,12 @@ if __name__ in ("__main__", "__mp_main__"):
                 session=session,
             )
 
-    chat = ChatGUI(
-        session_name,
+    default_chat = Chat(
         openai_llm,
         parsed_args.context_paths,
         parsed_args.working_dir,
         session=session,
     )
+    chat = ChatGUI(default_chat)
     # Start the NiceGUI app
     chat.main()
