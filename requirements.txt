@@ -28,9 +28,11 @@ orjson==3.10.14
 peewee==3.17.8
 propcache==0.2.1
 pscript==0.7.7
+pycairo==1.27.0
 pydantic==2.10.5
 pydantic_core==2.27.2
 Pygments==2.19.1
+PyGObject==3.50.0
 python-dotenv==1.0.1
 python-engineio==4.11.2
 python-multipart==0.0.20

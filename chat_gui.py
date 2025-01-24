@@ -1,5 +1,9 @@
-from nicegui import ui
-import asyncio
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gtk, GLib, Pango
+from threading import Thread
 
 
 class ChatGUI:
@@ -8,65 +12,75 @@ class ChatGUI:
         self.title = chat.get_name()
         self.last_displayed_message = 0
 
-        # Store references to UI elements
-        self.messages_container = None
-        self.message_cards = []
-        self.input_field = None
+        # Create the GTK application and window
+        self.app = Gtk.Application(application_id="com.example.ChatApp")
+        self.app.connect("activate", self.on_activate)
 
-        # Flag to indicate if the app should exit
-        self.exit_flag = False
+    def on_activate(self, app):
+        self.window = Gtk.ApplicationWindow(application=app)
+        self.window.set_title(self.title)
+        self.window.set_default_size(800, 600)
+        self.window.connect("close-request", self.on_close_request)
 
-    def construct_ui(self):
-        @ui.page("/")
-        def page():
-            with ui.column().classes("w-full").style("height: calc(100vh - 2rem)"):
-                with (
-                    ui.row()
-                    .classes("flex-grow w-full overflow-auto")
-                    .style("box-sizing: border-box; height: 40px")
-                ):
-                    ui.label(f"{self.title}").classes("text-center")
-                with (
-                    ui.row()
-                    .classes("flex-grow w-full overflow-auto")
-                    .style("box-sizing: border-box; height: calc(80% - 40px)")
-                ):
-                    self.messages_container = ui.column().classes("w-full")
-                with (
-                    ui.row()
-                    .classes("flex-grow w-full p-4")
-                    .style("height: 20%; box-sizing: border-box;")
-                ):
-                    self.input_field = (
-                        ui.input(placeholder="Type your message here...")
-                        .props("autofocus")
-                        .classes("w-full")
-                    )
-                    self.input_field.on(
-                        "keydown",
-                        lambda event: event.args["key"] == "Enter"
-                        and self.send_message(),
-                    )
-                    ui.button("Send", on_click=self.send_message).classes("ml-2")
+        # Create a vertical box to hold the widgets
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.window.set_child(vbox)
 
-            # Start the background task to update the chat display
-            ui.timer(0.5, self.update_chat_display)
+        # Create the messages container as a Box inside a ScrolledWindow
+        self.messages_container = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=6
+        )
+        scrolled_window = Gtk.ScrolledWindow()
+        scrolled_window.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled_window.set_child(self.messages_container)
+        scrolled_window.set_vexpand(True)
+        vbox.append(scrolled_window)
 
-    def send_message(self, _=None):
-        message = self.input_field.value
-        self.input_field.value = ""
+        # Create the input entry and send button in a horizontal box
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        vbox.append(hbox)
+
+        input_scrolled_window = Gtk.ScrolledWindow()
+        input_scrolled_window.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        input_scrolled_window.set_min_content_height(100)  # Set desired height
+        input_scrolled_window.set_vexpand(False)
+        input_scrolled_window.set_hexpand(True)
+
+        self.input_textview = Gtk.TextView()
+        self.input_textview.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.input_textview.set_vexpand(True)
+        self.input_textview.set_hexpand(True)
+        self.input_buffer = self.input_textview.get_buffer()
+        input_scrolled_window.set_child(self.input_textview)
+
+        hbox.append(input_scrolled_window)
+
+        send_button = Gtk.Button(label="Send")
+        send_button.connect("clicked", self.send_message)
+        hbox.append(send_button)
+
+        self.window.present()
+
+        # Set up a timer or idle function to update the chat display
+        GLib.timeout_add(500, self.update_chat_display)
+
+    def send_message(self, widget):
+        message = self.input_entry.get_text()
+        self.input_entry.set_text("")
         if message.strip():
-            # Send to LLM asynchronously
-            asyncio.create_task(self.handle_user_message(message))
+            # Send to LLM in a separate thread
+            thread = Thread(target=self.handle_user_message, args=(message,))
+            thread.start()
 
-    async def handle_user_message(self, message):
-        await asyncio.to_thread(self.chat.post_to_llm, self.chat.default_llm, message)
+    def handle_user_message(self, message):
+        self.chat.post_to_llm(self.chat.default_llm, message)
 
     def update_chat_display(self):
         while self.last_displayed_message < len(self.chat.history):
             message = self.chat.history[self.last_displayed_message]
             self.last_displayed_message += 1
-            self.print_message(message)
+            GLib.idle_add(self.print_message, message)
+        return True  # Continue calling this function
 
     def print_message(self, message):
         if message.get("is_context"):
@@ -75,52 +89,87 @@ class ChatGUI:
         sender = message.get("role", "")
         content = message.get("content", "")
 
-        # Determine alignment and style based on sender
+        # Format sender label and styling
         if sender == "assistant":
-            alignment = "start"
-            bg_color = "lightgray"
-            text_color = "black"
             sender_label = "Assistant"
+            text_color = "blue"
+            alignment = Gtk.Align.START
+            bg_color = "#E0F7FA"  # Light cyan
         elif sender == "system":
-            alignment = "start"
-            bg_color = "#ffffe0"  # Light yellow
-            text_color = "black"
             sender_label = "System"
+            text_color = "green"
+            alignment = Gtk.Align.CENTER
+            bg_color = "#E8F5E9"  # Light green
         else:
-            alignment = "end"
-            bg_color = "#d1ffd6"  # Light green
-            text_color = "black"
             sender_label = "You"
+            text_color = "black"
+            alignment = Gtk.Align.END
+            bg_color = "#FFF3E0"  # Light orange
 
-        with self.messages_container:
-            message_card = ui.card()
-            with (
-                message_card
-                .style(
-                    f"""
-                        align-self: {alignment};
-                        background-color: {bg_color};
-                        color: {text_color};
-                        max-width: 70%;
-                        margin: 5px;
-                        overflow-y: auto;
-                    """
-                )
-                .classes("p-2")
-            ) as card:
-                with ui.row():
-                    ui.label(f"{sender_label}:").style("font-weight: bold")
-                ui.markdown(content).classes("p-2")
-        self.message_cards.append(message_card)
+        # Create a box for the message
+        message_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        message_box.set_halign(alignment)
+        message_box.set_hexpand(True)
+        message_box.set_margin_top(5)
+        message_box.set_margin_bottom(5)
+        message_box.set_margin_start(10)
+        message_box.set_margin_end(10)
+        message_box.set_css_classes(["message-box"])
 
-        # Scroll to bottom
-        self.messages_container.update()
-        ui.run_javascript("window.scrollTo(0, document.body.scrollHeight);")
+        # Create sender label
+        sender_label_widget = Gtk.Label()
+        sender_label_widget.set_markup(f"<b>{sender_label}:</b>")
+        sender_label_widget.set_xalign(0)  # Left-align text
+        sender_label_widget.add_css_class("sender-label")
+        sender_label_widget.get_style_context().add_class(f"text-{text_color}")
+        message_box.append(sender_label_widget)
+
+        # Create content label
+        content_label = Gtk.Label()
+        content_label.set_text(content)
+        content_label.set_wrap(True)
+        content_label.set_xalign(0)
+        content_label.set_selectable(True)
+        message_box.append(content_label)
+
+        # Apply background color via CSS
+        message_box.set_name("message_box")
+        css_provider = Gtk.CssProvider()
+        css = f"""
+        #message_box {{
+            background-color: {bg_color};
+        }}
+        .text-blue {{
+            color: blue;
+        }}
+        .text-green {{
+            color: green;
+        }}
+        .text-black {{
+            color: black;
+        }}
+        """
+        css_provider.load_from_data(css.encode())
+        style_context = message_box.get_style_context()
+        style_context.add_provider(
+            css_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
+        )
+
+        # Add the message box to the messages container
+        self.messages_container.append(message_box)
+        # self.messages_container.show_all()
+
+        # Scroll to the bottom
+        adj = self.messages_container.get_parent().get_vadjustment()
+        if adj:
+            GLib.idle_add(adj.set_value, adj.get_upper() - adj.get_page_size())
 
     def main(self):
-        self.construct_ui()
-        ui.run(title=self.title)
+        self.app.run(None)
+
+    def on_close_request(self, window):
+        Gtk.main_quit()
+        return False  # Allow window to close
 
     def exit_app(self):
-        # Set the exit flag to True
-        self.exit_flag = True
+        self.app.quit()
