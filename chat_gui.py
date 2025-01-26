@@ -1,47 +1,52 @@
-
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, GLib, Pango
+from gi.repository import Gtk, GLib
 from threading import Thread
 
+import json
 
 class ChatGUI:
-    def __init__(self, chat):
+    def __init__(self, chat, on_back_to_sessions):
         self.chat = chat
+        self.on_back_to_sessions = on_back_to_sessions  # Callback function
         self.title = chat.get_name()
         self.last_displayed_message = 0
 
-        # Create the GTK application and window
-        self.app = Gtk.Application(application_id="com.example.ChatApp")
-        self.app.connect("activate", self.on_activate)
+        # Create the main container for the chat GUI
+        self.widget = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
 
-    def on_activate(self, app):
-        self.window = Gtk.ApplicationWindow(application=app)
-        self.window.set_title(self.title)
-        self.window.set_default_size(800, 600)
-        self.window.connect("close-request", self.on_close_request)
+        # **Add the header bar with the "Back to Sessions" button**
+        header_bar = Gtk.HeaderBar()
+        header_bar.set_show_title_buttons(False)
+        header_bar.set_title_widget(Gtk.Label(label=self.title))
 
-        # Create a vertical box to hold the widgets
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self.window.set_child(vbox)
+        back_button = Gtk.Button(label="Back to Sessions")
+        back_button.connect("clicked", self.on_back_button_clicked)
+        header_bar.pack_start(back_button)
+
+        self.widget.append(header_bar)
 
         # Create the messages container as a Box inside a ScrolledWindow
         self.messages_container = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL, spacing=6
         )
-        scrolled_window = Gtk.ScrolledWindow()
-        scrolled_window.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolled_window.set_child(self.messages_container)
-        scrolled_window.set_vexpand(True)
-        vbox.append(scrolled_window)
+        self.messages_scrolled_window = Gtk.ScrolledWindow()
+        self.messages_scrolled_window.set_policy(
+            Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC
+        )
+        self.messages_scrolled_window.set_child(self.messages_container)
+        self.messages_scrolled_window.set_vexpand(True)
+        self.widget.append(self.messages_scrolled_window)
 
-        # Create the input entry and send button in a horizontal box
+        # Create the input area and send button in a horizontal box
         hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        vbox.append(hbox)
+        self.widget.append(hbox)
 
         input_scrolled_window = Gtk.ScrolledWindow()
-        input_scrolled_window.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        input_scrolled_window.set_policy(
+            Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC
+        )
         input_scrolled_window.set_min_content_height(100)  # Set desired height
         input_scrolled_window.set_vexpand(False)
         input_scrolled_window.set_hexpand(True)
@@ -59,14 +64,18 @@ class ChatGUI:
         send_button.connect("clicked", self.send_message)
         hbox.append(send_button)
 
-        self.window.present()
-
+        self.update_chat_display()
         # Set up a timer or idle function to update the chat display
         GLib.timeout_add(500, self.update_chat_display)
 
+    def get_widget(self):
+        return self.widget
+
     def send_message(self, widget):
-        message = self.input_entry.get_text()
-        self.input_entry.set_text("")
+        start_iter = self.input_buffer.get_start_iter()
+        end_iter = self.input_buffer.get_end_iter()
+        message = self.input_buffer.get_text(start_iter, end_iter, True)
+        self.input_buffer.set_text("")
         if message.strip():
             # Send to LLM in a separate thread
             thread = Thread(target=self.handle_user_message, args=(message,))
@@ -157,19 +166,21 @@ class ChatGUI:
 
         # Add the message box to the messages container
         self.messages_container.append(message_box)
-        # self.messages_container.show_all()
+        self.scroll_to_bottom()
 
-        # Scroll to the bottom
-        adj = self.messages_container.get_parent().get_vadjustment()
-        if adj:
-            GLib.idle_add(adj.set_value, adj.get_upper() - adj.get_page_size())
-
-    def main(self):
-        self.app.run(None)
+    def scroll_to_bottom(self):
+        adjustment = self.messages_scrolled_window.get_vadjustment()
+        adjustment.set_value(adjustment.get_upper() - adjustment.get_page_size())
 
     def on_close_request(self, window):
-        Gtk.main_quit()
+        # Handle any cleanup if necessary
         return False  # Allow window to close
 
     def exit_app(self):
-        self.app.quit()
+        # Handle application exit if necessary
+        pass
+
+    # **Add this method to handle the back button click event**
+    def on_back_button_clicked(self, button):
+        if self.on_back_to_sessions:
+            self.on_back_to_sessions()
