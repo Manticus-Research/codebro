@@ -290,7 +290,9 @@ class Application:
 
     def on_back_to_sessions(self):
         # Switch back to the sessions view
+        to_delete = self.stack.get_visible_child()
         self.stack.set_visible_child_name("sessions_view")
+        self.stack.remove(to_delete)
         self.window.set_titlebar(None)
 
     def on_close_request(self, window):

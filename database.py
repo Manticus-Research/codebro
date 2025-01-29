@@ -7,6 +7,7 @@ from peewee import (
     DateTimeField,
     ForeignKeyField,
 )
+from playhouse.sqlite_ext import AutoIncrementField
 
 database = SqliteDatabase("codebuddy.db")
 
@@ -17,6 +18,7 @@ class BaseModel(Model):
 
 
 class Session(BaseModel):
+    id = AutoIncrementField()
     name = TextField(index=True)
     working_dir = TextField(index=True)
     started_at = DateTimeField(default=datetime.now(timezone.utc))
@@ -24,12 +26,14 @@ class Session(BaseModel):
 
 
 class ContextPath(BaseModel):
+    id = AutoIncrementField()
     path = TextField()
-    session = ForeignKeyField(Session, backref="context_paths")
+    session = ForeignKeyField(Session, backref="context_paths", on_delete="CASCADE")
 
 
 class Message(BaseModel):
-    session = ForeignKeyField(Session, backref="messages")
+    id = AutoIncrementField()
+    session = ForeignKeyField(Session, backref="messages", on_delete="CASCADE")
     model = TextField(index=True)
     role = TextField(index=True)
     content = TextField()
