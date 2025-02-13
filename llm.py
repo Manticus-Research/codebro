@@ -30,9 +30,6 @@ class LLM:
         try:
             response.raise_for_status()
         except requests.exceptions.HTTPError:
-            import pdb
-
-            pdb.set_trace()
             raise
 
         return response

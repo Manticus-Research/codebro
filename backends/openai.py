@@ -1,6 +1,7 @@
 class OpenAIBackend:
     function_support = {
         "o1-preview": False,
+        "o3-mini": False,
         "gpt-4o": True,
     }
 
@@ -8,7 +9,7 @@ class OpenAIBackend:
     tool_role = "function"
     system_role = "user"
 
-    def __init__(self, model="o1-preview"):
+    def __init__(self, model="o3-mini"):
         self.model = model
         self.api_base_url = "https://api.openai.com/v1"
         with open("openai_key") as f:
