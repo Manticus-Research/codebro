@@ -3,23 +3,21 @@ import os
 
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Gio
-from threading import Thread
 
-from chat_gui import ChatGUI
+from session_view import SessionView
 from chat import Chat
-from database import Session, ContextPath
+from database import Session
 from llm import LLM
-from tools import write_file, read_file
 from backends import OllamaBackend, OpenAIBackend
-from migrations.migrate import upgrade
-from database import database
 from datetime import datetime, timezone
+from bots.bots import code_writer_bot
 
 
 class Application:
     def __init__(self):
         self.app = Gtk.Application(application_id="com.manticusresearch.CodeBud")
         self.app.connect("activate", self.on_activate)
+        self.bots = [code_writer_bot]
 
     def on_activate(self, app):
         self.window = Gtk.ApplicationWindow(application=app)
@@ -272,20 +270,21 @@ class Application:
             self.start_chat(session)
 
     def start_chat(self, session):
-        # Create the chat interface
-        default_llm = LLM(OpenAIBackend())
+        # Create the chat interface using SessionView
+        default_llm = LLM(OllamaBackend())
         default_chat = Chat(
             default_llm,
             [],  # context_paths
             session.working_dir,
             session=session,
+            bots=self.bots,
         )
-        chat_gui = ChatGUI(default_chat, self.on_back_to_sessions)
+        session_view = SessionView(default_chat, self.on_back_to_sessions)
 
-        # Add chat GUI to the stack
-        self.stack.add_named(chat_gui.get_widget(), f"chat_view_{session.id}")
+        # Add SessionView to the stack
+        self.stack.add_named(session_view.get_widget(), f"chat_view_{session.id}")
 
-        # Switch to chat view
+        # Switch to the chat view
         self.stack.set_visible_child_name(f"chat_view_{session.id}")
 
     def on_back_to_sessions(self):

@@ -1,11 +1,11 @@
 from .bot import Bot
 from .action import Action
-from .condition import Condition
+from .condition import Condition, LLMCondition
 
 from llm import LLM
 from backends import OllamaBackend, OpenAIBackend
 
-llm = LLM(OpenAIBackend())
+llm = LLM(OllamaBackend())
 
 import re
 import json
@@ -63,30 +63,51 @@ def extract_code_changes(llm, message):
     return changes
 
 
+def write_to_file(change):
+    """Write a code change to a file."""
+    file_path = change.get("file")
+    code = change.get("changes")
+    if file_path:
+        with open(file_path, "w") as f:
+            f.write(code)
+
+
+def write_code(llm, messages):
+    """Write code to a file."""
+    last_message = messages[-1]
+    changes = extract_code_changes(llm, last_message)
+    for change in changes:
+        write_to_file(change)
+
+
 code_writer_bot = Bot(
     llm,
     [
         Action(
             [
-                Condition(
-                    "code_requested",
-                    "The next to last message is a user request for a code change, or for new code to be written."
+                # LLMCondition(
+                #     "code_requested",
+                #     "Checks if the user requested a code change or new code to be written.",
+                #     lambda messages: [messages[-2]] if len(messages) > 2 and messages[-2]["role"] == "user" else [],
+                #     llm,
+                #     "The user requested a code change or new code to be written.",
+                # ),
+                LLMCondition(
+                    "file_path",
+                    "Check whether there is a file path in the message.",
+                    lambda messages: [messages[-1]] if messages and messages[-1]["role"] == "assistant" else [],
+                    llm,
+                    "There is a file path in the message.",
                 ),
-                Condition(
+                LLMCondition(
                     "code_generated",
-                    "The last message is generated code by the assistant in response to a user request."
-                ),
-                Condition(
-                    "file_associated",
-                    "The generated code in the last message is meant to be written to a file."
+                    "Check whether the assistant generated code in response to a user request.",
+                    lambda messages: [messages[-1]] if messages and messages[-1]["role"] == "assistant" else [],
+                    llm,
+                    "There is code in the message.",
                 ),
             ],
-            lambda llm, messages:
-                last_message = messages[-1]
-                changes = extract_code_changes(llm, last_message)
-                for change in changes:
-                    write_to_file(change)
-            ,
+            write_code,
         ),
     ],
 )

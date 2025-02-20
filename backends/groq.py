@@ -1,8 +1,7 @@
-class OpenAIBackend:
+class GroqBackend:
     function_support = {
-        "o1-preview": False,
-        "o3-mini": False,
-        "gpt-4o": True,
+        "llama-3.3-70b-versatile": True,
+        "mistral-8x7b-32768": True,
     }
 
     tool_call_property = "function_call"
@@ -10,14 +9,12 @@ class OpenAIBackend:
     system_role = "user"
 
     def __init__(self):
-        self.api_base_url = "https://api.openai.com/v1"
-        with open("openai_key") as f:
-            self.api_key = f.read().strip()
+        self.api_base_url = "https://api.groq.com/openai/v1"
+        with open("groq_key") as f:
+            self.api_key = f.read
 
-    def get_default_model(self, usecase=None):
-        if usecase == "chat":
-            return "gpt-4o"
-        return "o3-mini"
+    def get_default_model(self, usecase: str):
+        return "llama-3.3-70b-versatile"
 
     def get_endpoint(self, endpoint: str):
         return f"{self.api_base_url}/{endpoint}"
@@ -41,6 +38,9 @@ class OpenAIBackend:
 
         return payload
 
+    def unwrap_function_call(self, function_call):
+        return function_call
+
     def prepare_payload(self, messages, model, options=None):
         payload = {
             "model": model,
@@ -51,6 +51,3 @@ class OpenAIBackend:
         if options:
             payload.update(options)
         return payload
-
-    def unwrap_function_call(self, function_call):
-        return function_call

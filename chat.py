@@ -12,7 +12,7 @@ from database import Message, ContextPath  # Import database models
 
 
 class Chat:
-    def __init__(self, default_llm, context_paths, working_dir, session):
+    def __init__(self, default_llm, context_paths, working_dir, session, bots=None):
         self.default_llm = default_llm
         self.command_parser = CommandParser(self)
         self.context_paths = context_paths
@@ -28,6 +28,8 @@ class Chat:
         if not self.history:
             self.setup_assistant_prompt()
         self.load_context()
+        self.bots = bots or []
+        self.proposed_actions = [] + self.evaluate_bots()
 
     def add_llm(self, llm, role):
         self.llms[role] = llm
@@ -44,7 +46,7 @@ class Chat:
             role=message["role"],
             content=message["content"],
             full_message=json.dumps(message),
-            model=self.default_llm.get_model(),
+            model=self.default_llm.model,
         )
 
         self.session.last_message_at = datetime.now()
@@ -147,6 +149,15 @@ class Chat:
         for msg in assistant_messages:
             self.add_message(msg)
 
+        self.proposed_actions += self.evaluate_bots()
+
+    def evaluate_bots(self):
+        proposed_actions = []
+        for bot in self.bots:
+            for action in bot.handle_message(self.history):
+                proposed_actions.append(action)
+        return proposed_actions
+
     def get_chat_history(self):
         return [msg for msg in self.history if not msg.get("internal")]
 
@@ -188,7 +199,6 @@ class Chat:
                 You are a software development assistant.
                 You will be able to interact with the codebase and perform various tasks.
                 You MUST not remove code unless asked to do so.
-                You MUST take care to not overwrite existing code when using the provided tools.
                 You will be helpful, precise and thorough.
 
             """,
@@ -198,10 +208,10 @@ class Chat:
     @property
     def aggregate_usage(self):
         usage = [
-            (self.default_llm.get_model(), self.default_llm.usage),
+            (self.default_llm.model, self.default_llm.usage),
         ]
         for role, llm in self.llms.items():
-            usage.append((llm.get_model(), llm.usage))
+            usage.append((llm.model, llm.usage))
 
         by_model = defaultdict(list)
         for model, usage in usage:

@@ -8,21 +8,27 @@ class OllamaBackend:
     system_role = "system"
 
     function_support = {
-        "phi3.5": False,
+        "phi4": False,
         "lamma3.2:3b": False,  # Actually True
         "lamma3.2:1b": False,  # Actually True
         "qwen2.5:0.5b": True,
     }
 
+    default_context_size = {
+        "phi4": 16 * 1024,
+        "lamma3.2:3b": 4 * 1024,
+        "lamma3.2:1b": 4 * 1024,
+        "qwen2.5:0.5b": 4 * 1024,
+    }
+
     def __init__(self):
         self.config = Config("ollama_cat.conf")
-        self.model = self.config.get_ollama_api()["default_chat_model"]
         self.ollama_api_conf = self.config.get_ollama_api()
 
         self.api_base_url = self.ollama_api_conf["url"]
 
-    def get_model(self, usecase: str):
-        return self.model
+    def get_default_model(self):
+        return "llama3.2:3b"
 
     def get_endpoint(self, endpoint: str):
         return f"{self.api_base_url}/{endpoint}"
@@ -44,14 +50,28 @@ class OllamaBackend:
     def extract_usage(self, response):
         return None
 
-    def append_functions(self, payload, functions):
-        if not self.function_support.get(self.model):
+    def append_functions(self, payload, functions, model):
+        if not self.function_support.get(model):
             return payload
 
         payload["tools"] = [
-            {"type": "function", "function": function} for function in functions
+            {"type": "function", "function ": function} for function in functions
         ]
         return payload
 
     def unwrap_function_call(self, function_call):
         return function_call["function"]
+
+    def prepare_payload(self, messages, model, options=None):
+        if not options:
+            options = {}
+
+        if "num_ctx" not in options:
+            options["num_ctx"] = self.default_context_size.get(model, 4 * 1024)
+
+        return {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "options": options,
+        }

@@ -7,11 +7,12 @@ from tools import LLMTool
 
 
 class LLM:
-    def __init__(self, backend):
+    def __init__(self, backend, model=None):
         self.usage = []
         self.functions = []  # Initialize a list for function definitions
         self.function_implementations_map = {}  # Initialize a map for function implementations
         self.backend = backend
+        self.model = model or self.backend.get_default_model()
         # self.load_context()
 
     def add_tool(self, tool: LLMTool):
@@ -35,12 +36,8 @@ class LLM:
         return response
 
     def post_to_chat(self, messages: str):
-        payload = {
-            "model": self.backend.get_model("chat"),
-            "messages": messages,
-            "stream": False,
-        }
-        payload = self.backend.append_functions(payload, self.functions)
+        payload = self.backend.prepare_payload(messages, self.model)
+        payload = self.backend.append_functions(payload, self.functions, self.model)
         response = self.request("POST", self.backend.get_chat_endpoint(), json=payload)
 
         return self.handle_chat_response(messages, response.json())
@@ -91,13 +88,10 @@ class LLM:
 
         # Continue the conversation with the function's result
         payload = {
-            "model": self.backend.get_model("chat"),
+            "model": self.model,
             "messages": messages + [function_response_message],
             "stream": False,
         }
         response = self.request("POST", self.backend.get_chat_endpoint(), json=payload)
 
         return new_messages + self.handle_chat_response(messages, response.json())
-
-    def get_model(self):
-        return self.backend.get_model("chat")
